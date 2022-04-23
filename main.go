@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -60,7 +61,24 @@ func licenser(cmd *cobra.Command, args []string) {
 		os.Exit(0)
 	}
 
-	applyLicense(rootDir, license)
+	sources, err := rootDir.ReadDirRecursiveFiltered(
+		paths.AndFilter(
+			func(file *paths.Path) bool { return file.Base() != ".git" },
+		),
+		paths.FilterOutDirectories(),
+	)
+	if err != nil {
+		fatal(8, "Error reading source directory: %s\n", err)
+	}
+
+	for _, s := range sources {
+		switch s.Ext() {
+		case ".go", ".c", ".cpp", ".h":
+			applyLicenseCStyle(s, license)
+		default:
+			fmt.Println("IGNORED:", s)
+		}
+	}
 }
 
 func detectLicense(rootDir *paths.Path) []string {
@@ -98,6 +116,47 @@ func extractLicense(source []string) []string {
 	return license
 }
 
-func applyLicense(rootDir *paths.Path, license []string) {
+func applyLicenseCStyle(sourceFile *paths.Path, license []string) {
+	source, err := sourceFile.ReadFileAsLines()
+	if err != nil {
+		fatal(8, "Error opening %s: %s\n", sourceFile, err)
+	}
 
+	output := new(bytes.Buffer)
+	for _, line := range license {
+		if line == "" {
+			output.WriteString(fmt.Sprintln("//"))
+		} else {
+			output.WriteString(fmt.Sprintln("//", line))
+		}
+	}
+	output.Write([]byte(fmt.Sprintln()))
+
+	original := new(bytes.Buffer)
+	header := true
+	for _, line := range source {
+		original.WriteString(fmt.Sprintln(line))
+		if header && strings.HasPrefix(line, "//") {
+			continue
+		}
+		if header {
+			header = false
+			if line != "" {
+				// This is not a license header, we should not replace it in the output
+				output.Write(original.Bytes())
+			}
+			continue
+		}
+
+		output.WriteString(fmt.Sprintln(line))
+	}
+
+	if bytes.Equal(original.Bytes(), output.Bytes()) {
+		fmt.Println("OK", sourceFile)
+		return
+	}
+	if err := sourceFile.WriteFile(output.Bytes()); err != nil {
+		fatal(8, "Error writing %s: %s\n", sourceFile, err)
+	}
+	fmt.Println("UPDATED", sourceFile)
 }
