@@ -39,10 +39,18 @@ func licenser(cmd *cobra.Command, args []string) {
 	}
 	rootDir := paths.New(args[0])
 	if !rootDir.IsDir() {
-		fatal(3, "Ls is not a directory\n", rootDir)
+		fatal(3, "%s is not a directory\n", rootDir)
 	}
 
-	license := detectLicense(rootDir)
+	var license []string
+	if len(args) < 2 {
+		license = detectLicense(rootDir)
+	} else if l, err := paths.New(args[1]).ReadFileAsLines(); err != nil {
+		fatal(4, "Error reading license file: %s\n", err)
+	} else {
+		license = l
+	}
+
 	if onlyDetectLicense {
 		fmt.Println("Detected license:")
 		fmt.Println()
