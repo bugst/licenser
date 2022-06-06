@@ -140,8 +140,12 @@ func applyLicenseCStyle(sourceFile *paths.Path, license []string) {
 
 	original := new(bytes.Buffer)
 	header := true
-	for _, line := range source {
-		original.WriteString(fmt.Sprintln(line))
+	for i, line := range source {
+		last := i == len(source)-1
+		original.WriteString(line)
+		if !last {
+			original.WriteString(fmt.Sprintln())
+		}
 		if header && strings.HasPrefix(line, "//") {
 			continue
 		}
@@ -154,7 +158,10 @@ func applyLicenseCStyle(sourceFile *paths.Path, license []string) {
 			continue
 		}
 
-		output.WriteString(fmt.Sprintln(line))
+		output.WriteString(line)
+		if !last {
+			output.WriteString(fmt.Sprintln())
+		}
 	}
 
 	if bytes.Equal(original.Bytes(), output.Bytes()) {
@@ -166,4 +173,3 @@ func applyLicenseCStyle(sourceFile *paths.Path, license []string) {
 	}
 	fmt.Println("UPDATED", sourceFile)
 }
-
